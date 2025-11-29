@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Photo se Live Quiz Banao</title>
+  <script src="https://cdn.jsdelivr.net/npm/@huggingface/inference@2.6.4/dist/inference.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 { font-size: 2.5rem; margin-bottom: 10px; }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: rgba(255,255,255,0.1);
+      padding: 30px;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+    }
+    #preview { max-width: 100%; max-height: 400px; margin: 20px 0; border-radius: 15px; }
+    input[type="file"] { margin: 20px 0; }
+    button {
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover { background: #ff5252; transform: scale(1.05); }
+    .quiz { margin-top: 30px; text-align: left; display: inline-block; }
+    .question { font-size: 1.4rem; margin: 25px 0; background: rgba(0,0,0,0.2); padding: 20px; border-radius: 15px; }
+    .options { margin: 15px 0; }
+    .option { background: rgba(255,255,255,0.2); margin: 10px; padding: 12px; border-radius: 10px; }
+    .loading { font-size: 1.5rem; margin: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📸 Photo se Live Quiz Banao!</h1>
+    <p>Apni photo upload karo aur turant 5 MCQ questions ready!</p>
+
+    <input type="file" id="photoInput" accept="image/*" />
+    <br/>
+    <button onclick="generateQuiz()">🚀 Quiz Generate Karo</button>
+
+    <div id="imagePreview"></div>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const HF_TOKEN = "hf_YOUR_TOKEN_HERE"; // ← Yahan apna free Hugging Face token daalo
+    // Token yahan se free banao: https://huggingface.co/settings/tokens (read permission chahiye)
+
+    const inference = new HfInference(HF_TOKEN);
+
+    function generateQuiz() {
+      const input = document.getElementById("photoInput");
+      const preview = document.getElementById("imagePreview");
+      const resultDiv = document.getElementById("result");
+      
+      if (!input.files || !input.files[0]) {
+        alert("Pehle photo select karo!");
+        return;
+      }
+
+      const file = input.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        preview.innerHTML = `<img id="preview" src="${e.target.result}" />`;
+        
+        resultDiv.innerHTML = `<div class="loading">🤔 AI photo dekh raha hai aur questions bana raha hai...</div>`;
+
+        // Step 1: Photo ka description (caption)
+        inference.imageToText({
+          model: "Salesforce/blip-image-captioning-large",
+          inputs: file
+        }).then(captionResponse => {
+          const caption = captionResponse[0].generated_text;
+          
+          // Step 2: Caption se 5 MCQ questions generate karo
+          const prompt = `
+            Ek photo mein yeh hai: "${caption}"
+            Iske baare mein 5 interesting multiple-choice questions banao (4 options, 1 correct).
+            Hindi mein likho aur har question ke baad correct answer bhi batao (spoiler tag mein).
+            Format aisa rakho:
+            Q1. Question?
+            A) opt1  B) opt2  C) opt3  D) opt4
+            Correct: A) opt1
+          `;
+
+          return inference.textGeneration({
+            model: "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            inputs: prompt,
+            parameters: { max_new_tokens: 800, temperature: 0.7 }
+          });
+        })
+        .then(response => {
+          const quizText = response.generated_text;
+          resultDiv.innerHTML = `
+            <h2>🎉 Aapka Live Quiz Ready Hai!</h2>
+            <div class="quiz">${quizText.replace(/\n/g, '<br>')}</div>
+            <br/>
+            <button onclick="location.reload()">🔄 Naya Quiz Banao</button>
+          `;
+        })
+        .catch(err => {
+          console.error(err);
+          resultDiv.innerHTML = "Kuch error ho gaya. Hugging Face token check karo ya internet connection dekho.";
+        });
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  </script>
+
+  <div style="margin-top:50px; color:#ccc; font-size:0.9rem;">
+    <p>Free Hugging Face token banao: <a href="https://huggingface.co/settings/tokens" target="_blank" style="color:#ff6b6b;">https://huggingface.co/settings/tokens</a></p>
+    <p>Token ko "HF_TOKEN" wali line mein daal do → kaam shuru!</p>
+  </div>
+</body>
+</html>
